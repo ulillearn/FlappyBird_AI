@@ -6,60 +6,60 @@ export class Game {
     this.canvas = document.getElementById(canvasId);
     this.ctx = this.canvas.getContext("2d");
 
-    // Matikan smoothing agar pixel art terlihat tajam
+    // Matikan anti-aliasing (smoothing) agar visual pixel art tetap tajam
     this.ctx.imageSmoothingEnabled = false;
 
     this.width = this.canvas.width;
     this.height = this.canvas.height;
 
-    // Game objects
+    // Entitas Game
     this.pipes = [];
     this.population = null;
 
-    // Game state
+    // State Game Loop
     this.frameCount = 0;
-    this.pipeInterval = 120;
+    this.pipeInterval = 120; // Jarak antar pipa (dalam frame)
     this.lastPipeFrame = 0;
     this.isRunning = true;
-    this.minFramesPerGeneration = 300;
+    this.minFramesPerGeneration = 300; // Minimal durasi generasi (mencegah evolusi terlalu cepat)
 
-    // Kecepatan Game
+    // Kecepatan Gulir (Scroll Speed)
     this.gameSpeed = 3;
 
-    // Variabel posisi animasi tanah
+    // Variabel animasi tanah
     this.groundX = 0;
 
-    // State untuk jeda setelah generasi selesai
+    // State Transisi Generasi
     this.generationEnded = false;
     this.generationEndFrame = 0;
-    this.endDelayFrames = 60;
+    this.endDelayFrames = 60; // Waktu tunggu sebelum generasi baru dimulai
 
-    // Score tracking
+    // Tracking Skor
     this.currentScore = 0;
     this.currentPipes = 0;
     this.bestScoreOverall = 0;
     this.generationBestScore = 0;
     this.generationBestPipes = 0;
 
-    // Callbacks
+    // Callback ke UI (Main.js)
     this.onGenerationComplete = null;
     this.onScoreUpdate = null;
 
-    // --- LOAD ASSETS (Hanya Bird & Cloud, Ground kita bikin sendiri) ---
+    // Asset Loading: Hanya memuat Burung dan Awan
+    // Tanah (Ground) dan Pipa dibuat secara prosedural (coding)
     this.birdImage = new Image();
     this.birdImage.src = "assets/bird.webp";
 
     this.cloudImage = new Image();
     this.cloudImage.src = "assets/cloud.svg";
 
-    // Background elements
     this.clouds = [];
     this.initBackgroundElements();
 
-    // Initialize game
     this.init();
   }
 
+  // Inisialisasi elemen dekoratif background (Awan)
   initBackgroundElements() {
     this.clouds = [];
     for (let i = 0; i < 6; i++) {
@@ -72,11 +72,14 @@ export class Game {
     }
   }
 
+  // Reset Game / Inisialisasi Awal
   init() {
-    this.population = new Population(50, 0.1);
+    this.population = new Population(50, 0.1); // 50 Burung, Mutasi 10%
     this.pipes = [];
     this.frameCount = 0;
     this.lastPipeFrame = 0;
+
+    // Reset Skor
     this.currentScore = 0;
     this.currentPipes = 0;
     this.generationBestScore = 0;
@@ -86,6 +89,7 @@ export class Game {
 
     this.pipes.push(new Pipe(this.width));
 
+    // Event Listener: Saat populasi mencetak skor baru
     this.population.onScoreUpdate = (score, pipes) => {
       if (score > this.generationBestScore) {
         this.generationBestScore = score;
@@ -108,9 +112,11 @@ export class Game {
     }
   }
 
+  // Main Logic Loop (Update Physics & AI)
   update() {
     if (!this.isRunning) return;
 
+    // 1. Handle Transisi Generasi (Jeda waktu)
     if (this.generationEnded) {
       this.frameCount++;
       if (this.frameCount - this.generationEndFrame >= this.endDelayFrames) {
@@ -122,12 +128,16 @@ export class Game {
 
     this.frameCount++;
 
+    // 2. Update Environment
     this.updateBackground();
     this.updateGround();
     this.updatePipes();
 
+    // 3. Update AI Population
+    // Mengembalikan jumlah burung yang masih hidup
     const aliveCount = this.population.update(this.pipes);
 
+    // 4. Cek Kondisi Game Over (Semua mati)
     if (aliveCount === 0 && this.frameCount >= this.minFramesPerGeneration) {
       console.log(`All birds dead in generation ${this.population.generation}`);
       this.generationEnded = true;
@@ -147,11 +157,9 @@ export class Game {
   }
 
   updateGround() {
-    // Geser ground
     this.groundX -= this.gameSpeed;
-
-    // Pola rumput akan berulang setiap 24 pixel (sesuai ukuran pola di drawProceduralGround)
-    // Jadi kita mereset offset setiap kelipatan 24.
+    // Infinite Scroll Logic: Reset posisi setiap kali pola selesai (24px)
+    // Ini mencegah koordinat menjadi terlalu besar dan menjaga loop mulus
     const patternSize = 24;
     this.groundX = this.groundX % patternSize;
   }
@@ -162,6 +170,7 @@ export class Game {
     this.pipes = this.pipes.filter((pipe) => !pipe.isOffScreen());
     this.pipes.forEach((pipe) => pipe.update());
 
+    // Spawn pipa baru berdasarkan interval
     if (
       this.frameCount - this.lastPipeFrame >= this.pipeInterval &&
       this.frameCount > 60
@@ -171,10 +180,13 @@ export class Game {
     }
   }
 
+  // Evolusi: Pemicu Algoritma Genetika
   nextGeneration() {
     console.log(`Completing generation ${this.population.generation}`);
+    // Meminta Population class membuat generasi baru
     const result = this.population.nextGeneration();
 
+    // Reset Environment untuk generasi baru
     this.pipes = [];
     this.frameCount = 0;
     this.lastPipeFrame = 0;
@@ -187,6 +199,7 @@ export class Game {
 
     this.pipes.push(new Pipe(this.width));
 
+    // Update UI
     if (this.onScoreUpdate) {
       this.onScoreUpdate(this.currentScore, this.currentPipes);
     }
@@ -204,19 +217,25 @@ export class Game {
     );
   }
 
+  // Main Rendering Loop
   draw() {
     this.ctx.clearRect(0, 0, this.width, this.height);
+
+    // Layer 1: Background
     this.drawBackgroundOnly();
 
+    // Layer 2: Pipes
     this.pipes.forEach((pipe) => {
       this.drawPipeWithEffects(pipe);
     });
 
-    // Panggil fungsi ground baru (prosedural)
+    // Layer 3: Ground (Prosedural)
     this.drawProceduralGround();
 
+    // Layer 4: Birds
     this.population.draw(this.ctx, this.birdImage);
 
+    // Layer 5: UI Overlay (Jika transisi)
     if (this.generationEnded) {
       this.drawGenerationEndText();
     }
@@ -242,6 +261,7 @@ export class Game {
     const y = 60;
     const radius = 25;
 
+    // Gradient Matahari
     const sunGradient = this.ctx.createRadialGradient(x, y, 0, x, y, radius);
     sunGradient.addColorStop(0, "#FFEB3B");
     sunGradient.addColorStop(1, "#FF9800");
@@ -251,6 +271,7 @@ export class Game {
     this.ctx.arc(x, y, radius, 0, Math.PI * 2);
     this.ctx.fill();
 
+    // Efek Sinar
     this.ctx.strokeStyle = "rgba(255, 235, 59, 0.6)";
     this.ctx.lineWidth = 5;
 
@@ -279,58 +300,54 @@ export class Game {
     }
   }
 
-  // --- 🔥 FITUR BARU: GROUND PROSEDURAL (DIBIKIN PAKE KODE) ---
+  // --- RENDERING TANAH PROSEDURAL ---
+  // Menggambar tanah menggunakan primitive shape canvas untuk hasil tajam
+  // dan menghindari celah pixel (gap) yang sering muncul pada looping gambar
   drawProceduralGround() {
-    const groundHeight = 80; // Tinggi tanah
+    const groundHeight = 80;
     const y = this.height - groundHeight;
-    const grassThickness = 15; // Tebal rumput
+    const grassThickness = 15;
 
-    // 1. Gambar TANAH (Bagian Coklat Bawah)
-    // Digambar full screen, jadi tidak mungkin ada celah vertikal
-    this.ctx.fillStyle = "#ded895"; // Warna krem/coklat pasir
+    // 1. Tanah Dasar (Coklat)
+    this.ctx.fillStyle = "#ded895";
     this.ctx.fillRect(0, y, this.width, groundHeight);
 
-    // 2. Gambar RUMPUT (Bagian Hijau Atas)
-    this.ctx.fillStyle = "#73bf2e"; // Hijau cerah
+    // 2. Rumput (Hijau)
+    this.ctx.fillStyle = "#73bf2e";
     this.ctx.fillRect(0, y, this.width, grassThickness);
 
-    // 3. Gambar BORDER Rumput (Garis hijau tua di atas)
+    // 3. Detail Border Rumput
     this.ctx.fillStyle = "#558b2f";
-    this.ctx.fillRect(0, y, this.width, 2);
+    this.ctx.fillRect(0, y, this.width, 2); // Garis atas
+    this.ctx.fillRect(0, y + grassThickness, this.width, 2); // Bayangan bawah
 
-    // 4. Gambar BORDER Bawah Rumput (Garis bayangan)
-    this.ctx.fillStyle = "#558b2f";
-    this.ctx.fillRect(0, y + grassThickness, this.width, 2);
-
-    // 5. Gambar MOTIF BERGERAK (Diagonal Stripes ala Flappy Bird)
-    // Pola berulang setiap 24 pixel (patternSize)
+    // 4. Motif Diagonal (Stripes) Bergerak
+    // Menggunakan loop untuk menggambar jajaran genjang berulang
     const patternSize = 24;
 
     this.ctx.save();
     this.ctx.beginPath();
-    // Warna garis motif (hijau sedikit lebih gelap/terang)
-    this.ctx.fillStyle = "#65a628";
+    this.ctx.fillStyle = "#65a628"; // Warna motif hijau gelap
 
-    // Kita mulai loop dari posisi groundX (negatif) sampai melebihi lebar layar
-    // Ini menciptakan efek animasi bergerak
+    // Kalkulasi posisi awal (offset) berdasarkan groundX
     let startX = Math.floor(this.groundX);
 
-    // Pastikan startX mulai cukup jauh di kiri agar tidak ada celah saat masuk layar
+    // Pastikan startX mulai dari kiri layar (negative) agar mulus
     while (startX > -patternSize) startX -= patternSize;
 
     for (let i = startX; i < this.width; i += patternSize) {
-      // Gambar jajaran genjang (diagonal stripe)
-      // Koordinat relatif terhadap i
-      this.ctx.moveTo(i + 10, y + 2); // Atas kiri
-      this.ctx.lineTo(i + 16, y + 2); // Atas kanan
-      this.ctx.lineTo(i + 6, y + grassThickness); // Bawah kanan
-      this.ctx.lineTo(i, y + grassThickness); // Bawah kiri
+      // Gambar bentuk diagonal
+      this.ctx.moveTo(i + 10, y + 2);
+      this.ctx.lineTo(i + 16, y + 2);
+      this.ctx.lineTo(i + 6, y + grassThickness);
+      this.ctx.lineTo(i, y + grassThickness);
     }
     this.ctx.fill();
     this.ctx.restore();
   }
 
   drawPipeWithEffects(pipe) {
+    // Gradient Warna Pipa (Hijau Terang ke Hijau Gelap)
     const pipeGradient = this.ctx.createLinearGradient(
       pipe.x,
       0,
@@ -343,10 +360,8 @@ export class Game {
 
     this.ctx.fillStyle = pipeGradient;
 
-    // Top pipe
+    // Pipa Atas & Bawah
     this.ctx.fillRect(pipe.x, 0, pipe.width, pipe.gapY);
-
-    // Bottom pipe
     this.ctx.fillRect(
       pipe.x,
       pipe.gapY + pipe.gapHeight,
@@ -354,15 +369,15 @@ export class Game {
       this.height
     );
 
-    // Pipe caps
+    // Detail "Kepala" Pipa (Caps)
     this.ctx.fillStyle = "#1E8449";
 
-    // Top cap
+    // Cap Atas
     this.ctx.fillRect(pipe.x - 5, pipe.gapY - 20, pipe.width + 10, 20);
-    this.ctx.fillStyle = "#145A32";
+    this.ctx.fillStyle = "#145A32"; // Shadow
     this.ctx.fillRect(pipe.x - 5, pipe.gapY - 20, pipe.width + 10, 5);
 
-    // Bottom cap
+    // Cap Bawah
     this.ctx.fillStyle = "#1E8449";
     this.ctx.fillRect(
       pipe.x - 5,
@@ -370,7 +385,7 @@ export class Game {
       pipe.width + 10,
       20
     );
-    this.ctx.fillStyle = "#145A32";
+    this.ctx.fillStyle = "#145A32"; // Shadow
     this.ctx.fillRect(
       pipe.x - 5,
       pipe.gapY + pipe.gapHeight,
@@ -380,15 +395,18 @@ export class Game {
   }
 
   drawGenerationEndText() {
+    // Overlay Gelap
     this.ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
     this.ctx.fillRect(0, 0, this.width, this.height);
 
+    // Kotak Pesan
     this.ctx.fillStyle = "rgba(79, 70, 229, 0.9)";
     this.ctx.shadowColor = "#4f46e5";
     this.ctx.shadowBlur = 20;
     this.ctx.fillRect(this.width / 2 - 160, this.height / 2 - 60, 320, 120);
     this.ctx.shadowBlur = 0;
 
+    // Teks
     this.ctx.fillStyle = "#FFFFFF";
     this.ctx.font = "bold 26px Arial";
     this.ctx.textAlign = "center";
@@ -406,6 +424,7 @@ export class Game {
       this.height / 2 + 15
     );
 
+    // Countdown
     const framesLeft =
       this.endDelayFrames - (this.frameCount - this.generationEndFrame);
     const secondsLeft = Math.ceil(framesLeft / 60);
