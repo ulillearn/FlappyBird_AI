@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Flappy Bird AI - Algoritma Genetika</title>
+    <link rel="stylesheet" href="style.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  </head>
+  <body>
+    <div class="container">
+      <!-- Header -->
+      <header class="header">
+        <h1>🦆 Flappy Bird AI - Algoritma Genetika</h1>
+        <p class="subtitle">Implementasi Algoritma Genetika untuk Game AI</p>
+      </header>
+
+      <!-- Body -->
+      <div class="main-content">
+        <!-- Panel Simulasi Game -->
+        <div class="game-panel">
+          <div class="game-header">
+            <h2>🎮 Simulasi Game</h2>
+            <div class="game-stats">
+              <div class="stat">
+                <span class="label">Generasi:</span>
+                <span id="generation-display" class="value">1</span>
+              </div>
+              <div class="stat">
+                <span class="label">Burung Hidup:</span>
+                <span id="alive-display" class="value">50</span>
+              </div>
+              <div class="stat">
+                <span class="label">Skor Tertinggi:</span>
+                <span id="highscore-display" class="value">0</span>
+              </div>
+              <div class="stat">
+                <span class="label">Pipa Dilewati:</span>
+                <span id="pipes-display" class="value">0</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="game-canvas-container">
+            <canvas id="gameCanvas" width="400" height="600"></canvas>
+            <div class="game-controls">
+              <button id="pause-btn" class="btn">⏸️ Jeda</button>
+              <button id="reset-btn" class="btn">🔄 Reset</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Panel Data -->
+        <div class="data-panel">
+          <!-- Tabel Riwayat Generasi -->
+          <div class="history-section">
+            <h3>📊 Riwayat Generasi</h3>
+            <div class="table-container">
+              <table id="history-table">
+                <thead>
+                  <tr>
+                    <th>Generasi</th>
+                    <th>Skor Tertinggi</th>
+                    <th>Pipa Dilewati</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="history-body">
+                  <!-- Data akan diisi -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Chart Perkembangan Skor -->
+          <div class="chart-section">
+            <h3>📈 Perkembangan Skor</h3>
+            <div class="chart-container">
+              <canvas id="score-chart"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <footer class="footer">
+        <p>
+          Simulasi menunjukkan evolusi AI dalam game Flappy Bird menggunakan
+          Algoritma Genetika.
+        </p>
+        <p class="group-info">Kelompok 8</p>
+      </footer>
+    </div>
+
+    <!-- Load JavaScript Modules -->
+    <script type="module" src="js/main.js"></script>
+  </body>
+</html>
