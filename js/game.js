@@ -5,6 +5,10 @@ export class Game {
   constructor(canvasId) {
     this.canvas = document.getElementById(canvasId);
     this.ctx = this.canvas.getContext("2d");
+
+    // Matikan smoothing agar pixel art terlihat tajam
+    this.ctx.imageSmoothingEnabled = false;
+
     this.width = this.canvas.width;
     this.height = this.canvas.height;
 
@@ -19,37 +23,57 @@ export class Game {
     this.isRunning = true;
     this.minFramesPerGeneration = 300;
 
+    // Kecepatan Game
+    this.gameSpeed = 3;
+
+    // Variabel posisi animasi tanah
+    this.groundX = 0;
+
     // State untuk jeda setelah generasi selesai
     this.generationEnded = false;
     this.generationEndFrame = 0;
-    this.endDelayFrames = 60; // 1 detik (60 fps)
+    this.endDelayFrames = 60;
 
-    // Score tracking - HANYK UNTUK GENERASI SAAT INI
-    this.currentScore = 0; // Skor tertinggi generasi saat ini
-    this.currentPipes = 0; // Pipa dilewati generasi saat ini
-    this.bestScoreOverall = 0; // Skor tertinggi sepanjang masa (untuk internal)
-
-    // Tracking generasi saat ini
-    this.generationBestScore = 0; // Skor terbaik di generasi ini
-    this.generationBestPipes = 0; // Pipa terbaik di generasi ini
+    // Score tracking
+    this.currentScore = 0;
+    this.currentPipes = 0;
+    this.bestScoreOverall = 0;
+    this.generationBestScore = 0;
+    this.generationBestPipes = 0;
 
     // Callbacks
     this.onGenerationComplete = null;
     this.onScoreUpdate = null;
 
-    // Load bird image
+    // --- LOAD ASSETS (Hanya Bird & Cloud, Ground kita bikin sendiri) ---
     this.birdImage = new Image();
     this.birdImage.src = "assets/bird.webp";
+
+    this.cloudImage = new Image();
+    this.cloudImage.src = "assets/cloud.svg";
+
+    // Background elements
+    this.clouds = [];
+    this.initBackgroundElements();
 
     // Initialize game
     this.init();
   }
 
-  init() {
-    // Parameter tetap
-    this.population = new Population(50, 0.1);
+  initBackgroundElements() {
+    this.clouds = [];
+    for (let i = 0; i < 6; i++) {
+      this.clouds.push({
+        x: Math.random() * this.width,
+        y: 50 + Math.random() * 150,
+        size: 50 + Math.random() * 50,
+        speed: 0.15 + Math.random() * 0.25,
+      });
+    }
+  }
 
-    // Reset state
+  init() {
+    this.population = new Population(50, 0.1);
     this.pipes = [];
     this.frameCount = 0;
     this.lastPipeFrame = 0;
@@ -58,34 +82,27 @@ export class Game {
     this.generationBestScore = 0;
     this.generationBestPipes = 0;
     this.generationEnded = false;
+    this.groundX = 0;
 
-    // Buat pipa pertama
     this.pipes.push(new Pipe(this.width));
 
-    // Setup callbacks - KIRIM DATA GENERASI SAAT INI SAJA
     this.population.onScoreUpdate = (score, pipes) => {
-      // Update data terbaik generasi saat ini
       if (score > this.generationBestScore) {
         this.generationBestScore = score;
         this.generationBestPipes = pipes;
       }
-
-      // Update display dengan data generasi saat ini
       this.currentScore = this.generationBestScore;
       this.currentPipes = this.generationBestPipes;
 
-      // Update skor tertinggi sepanjang masa (hanya untuk internal)
       if (score > this.bestScoreOverall) {
         this.bestScoreOverall = score;
       }
 
       if (this.onScoreUpdate) {
-        // Kirim data generasi saat ini saja, bukan bestOverall
         this.onScoreUpdate(this.currentScore, this.currentPipes);
       }
     };
 
-    // Kirim nilai awal 0 untuk reset display
     if (this.onScoreUpdate) {
       this.onScoreUpdate(this.currentScore, this.currentPipes);
     }
@@ -94,55 +111,57 @@ export class Game {
   update() {
     if (!this.isRunning) return;
 
-    // FASE 1: Jika generasi sudah berakhir (semua burung mati + sudah mencapai minFrames)
     if (this.generationEnded) {
       this.frameCount++;
-
-      // Setelah delay, lanjut ke generasi berikutnya
       if (this.frameCount - this.generationEndFrame >= this.endDelayFrames) {
         this.generationEnded = false;
         this.nextGeneration();
       }
-      return; // Tidak update apapun selama jeda
+      return;
     }
 
     this.frameCount++;
 
-    // Update pipa
+    this.updateBackground();
+    this.updateGround();
     this.updatePipes();
 
-    // Update populasi
     const aliveCount = this.population.update(this.pipes);
 
-    // Tandai generasi berakhir hanya jika:
-    // 1. Semua burung mati
-    // 2. Sudah mencapai minimum frames
     if (aliveCount === 0 && this.frameCount >= this.minFramesPerGeneration) {
       console.log(`All birds dead in generation ${this.population.generation}`);
       this.generationEnded = true;
       this.generationEndFrame = this.frameCount;
       return;
     }
+  }
 
-    // Debug info
-    if (this.frameCount % 300 === 0) {
-      console.log(
-        `Frame: ${this.frameCount}, Alive: ${aliveCount}, Gen: ${this.population.generation}`
-      );
-    }
+  updateBackground() {
+    this.clouds.forEach((cloud) => {
+      cloud.x += cloud.speed;
+      if (cloud.x - cloud.size > this.width) {
+        cloud.x = -cloud.size * 2;
+        cloud.y = 50 + Math.random() * 150;
+      }
+    });
+  }
+
+  updateGround() {
+    // Geser ground
+    this.groundX -= this.gameSpeed;
+
+    // Pola rumput akan berulang setiap 24 pixel (sesuai ukuran pola di drawProceduralGround)
+    // Jadi kita mereset offset setiap kelipatan 24.
+    const patternSize = 24;
+    this.groundX = this.groundX % patternSize;
   }
 
   updatePipes() {
-    // Jangan update pipa jika generasi sudah berakhir
     if (this.generationEnded) return;
 
-    // Hapus pipa yang keluar layar
     this.pipes = this.pipes.filter((pipe) => !pipe.isOffScreen());
-
-    // Update posisi pipa
     this.pipes.forEach((pipe) => pipe.update());
 
-    // Tambah pipa baru
     if (
       this.frameCount - this.lastPipeFrame >= this.pipeInterval &&
       this.frameCount > 60
@@ -154,116 +173,250 @@ export class Game {
 
   nextGeneration() {
     console.log(`Completing generation ${this.population.generation}`);
-
-    // Dapatkan hasil generasi SEKARANG (sebelum increment)
     const result = this.population.nextGeneration();
 
-    // Reset state untuk generasi baru
     this.pipes = [];
     this.frameCount = 0;
     this.lastPipeFrame = 0;
-    this.generationBestScore = 0; // RESET untuk generasi baru
-    this.generationBestPipes = 0; // RESET untuk generasi baru
+    this.generationBestScore = 0;
+    this.generationBestPipes = 0;
     this.currentScore = 0;
     this.currentPipes = 0;
     this.generationEnded = false;
+    this.groundX = 0;
 
-    // Buat pipa pertama untuk generasi baru
     this.pipes.push(new Pipe(this.width));
 
-    // Kirim update display dengan nilai 0 untuk generasi baru
     if (this.onScoreUpdate) {
       this.onScoreUpdate(this.currentScore, this.currentPipes);
     }
 
-    // Panggil callback dengan hasil generasi yang sudah selesai
     if (this.onGenerationComplete) {
       this.onGenerationComplete({
         generation: result.generation,
-        bestScore: result.bestScore, // Skor terbaik generasi yang baru selesai
+        bestScore: result.bestScore,
         averageScore: result.averageScore,
-        pipesPassed: result.pipesPassed, // Pipa terbaik generasi yang baru selesai
+        pipesPassed: result.pipesPassed,
       });
     }
-
     console.log(
-      `Generation ${result.generation} recorded. Best: ${result.bestScore}, Pipes: ${result.pipesPassed}`
+      `Generation ${result.generation} recorded. Best: ${result.bestScore}`
     );
   }
 
   draw() {
-    // Clear canvas
     this.ctx.clearRect(0, 0, this.width, this.height);
+    this.drawBackgroundOnly();
 
-    // Draw background
-    this.drawBackground();
+    this.pipes.forEach((pipe) => {
+      this.drawPipeWithEffects(pipe);
+    });
 
-    // Draw pipes
-    this.pipes.forEach((pipe) => pipe.draw(this.ctx));
+    // Panggil fungsi ground baru (prosedural)
+    this.drawProceduralGround();
 
-    // Draw birds
     this.population.draw(this.ctx, this.birdImage);
 
-    // Tampilkan teks jika generasi berakhir
     if (this.generationEnded) {
       this.drawGenerationEndText();
     }
   }
 
-  drawBackground() {
-    // Sky gradient
+  drawBackgroundOnly() {
     const gradient = this.ctx.createLinearGradient(0, 0, 0, this.height);
-    gradient.addColorStop(0, "#87CEEB");
-    gradient.addColorStop(0.7, "#E0F7FA");
-    gradient.addColorStop(1, "#C8E6C9");
+    gradient.addColorStop(0, "#A0D8EF");
+    gradient.addColorStop(1, "#E0F7FA");
+
     this.ctx.fillStyle = gradient;
     this.ctx.fillRect(0, 0, this.width, this.height);
 
-    // Simple clouds
-    this.drawCloud(100, 80, 60);
-    this.drawCloud(300, 120, 80);
-    this.drawCloud(200, 180, 50);
+    this.drawSun();
+
+    this.clouds.forEach((cloud) => {
+      this.drawCloud(cloud.x, cloud.y, cloud.size);
+    });
+  }
+
+  drawSun() {
+    const x = this.width - 60;
+    const y = 60;
+    const radius = 25;
+
+    const sunGradient = this.ctx.createRadialGradient(x, y, 0, x, y, radius);
+    sunGradient.addColorStop(0, "#FFEB3B");
+    sunGradient.addColorStop(1, "#FF9800");
+    this.ctx.fillStyle = sunGradient;
+
+    this.ctx.beginPath();
+    this.ctx.arc(x, y, radius, 0, Math.PI * 2);
+    this.ctx.fill();
+
+    this.ctx.strokeStyle = "rgba(255, 235, 59, 0.6)";
+    this.ctx.lineWidth = 5;
+
+    for (let i = 0; i < 8; i++) {
+      const angle = (i * Math.PI) / 4;
+      this.ctx.beginPath();
+      this.ctx.moveTo(
+        x + Math.cos(angle) * (radius + 5),
+        y + Math.sin(angle) * (radius + 5)
+      );
+      this.ctx.lineTo(
+        x + Math.cos(angle) * (radius + 30),
+        y + Math.sin(angle) * (radius + 30)
+      );
+      this.ctx.stroke();
+    }
   }
 
   drawCloud(x, y, size) {
-    this.ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
+    if (this.cloudImage.complete) {
+      this.ctx.save();
+      this.ctx.shadowBlur = 0;
+      this.ctx.shadowColor = "transparent";
+      this.ctx.drawImage(this.cloudImage, x, y, size, size * 0.6);
+      this.ctx.restore();
+    }
+  }
+
+  // --- 🔥 FITUR BARU: GROUND PROSEDURAL (DIBIKIN PAKE KODE) ---
+  drawProceduralGround() {
+    const groundHeight = 80; // Tinggi tanah
+    const y = this.height - groundHeight;
+    const grassThickness = 15; // Tebal rumput
+
+    // 1. Gambar TANAH (Bagian Coklat Bawah)
+    // Digambar full screen, jadi tidak mungkin ada celah vertikal
+    this.ctx.fillStyle = "#ded895"; // Warna krem/coklat pasir
+    this.ctx.fillRect(0, y, this.width, groundHeight);
+
+    // 2. Gambar RUMPUT (Bagian Hijau Atas)
+    this.ctx.fillStyle = "#73bf2e"; // Hijau cerah
+    this.ctx.fillRect(0, y, this.width, grassThickness);
+
+    // 3. Gambar BORDER Rumput (Garis hijau tua di atas)
+    this.ctx.fillStyle = "#558b2f";
+    this.ctx.fillRect(0, y, this.width, 2);
+
+    // 4. Gambar BORDER Bawah Rumput (Garis bayangan)
+    this.ctx.fillStyle = "#558b2f";
+    this.ctx.fillRect(0, y + grassThickness, this.width, 2);
+
+    // 5. Gambar MOTIF BERGERAK (Diagonal Stripes ala Flappy Bird)
+    // Pola berulang setiap 24 pixel (patternSize)
+    const patternSize = 24;
+
+    this.ctx.save();
     this.ctx.beginPath();
-    this.ctx.arc(x, y, size * 0.5, 0, Math.PI * 2);
+    // Warna garis motif (hijau sedikit lebih gelap/terang)
+    this.ctx.fillStyle = "#65a628";
+
+    // Kita mulai loop dari posisi groundX (negatif) sampai melebihi lebar layar
+    // Ini menciptakan efek animasi bergerak
+    let startX = Math.floor(this.groundX);
+
+    // Pastikan startX mulai cukup jauh di kiri agar tidak ada celah saat masuk layar
+    while (startX > -patternSize) startX -= patternSize;
+
+    for (let i = startX; i < this.width; i += patternSize) {
+      // Gambar jajaran genjang (diagonal stripe)
+      // Koordinat relatif terhadap i
+      this.ctx.moveTo(i + 10, y + 2); // Atas kiri
+      this.ctx.lineTo(i + 16, y + 2); // Atas kanan
+      this.ctx.lineTo(i + 6, y + grassThickness); // Bawah kanan
+      this.ctx.lineTo(i, y + grassThickness); // Bawah kiri
+    }
     this.ctx.fill();
+    this.ctx.restore();
+  }
+
+  drawPipeWithEffects(pipe) {
+    const pipeGradient = this.ctx.createLinearGradient(
+      pipe.x,
+      0,
+      pipe.x + pipe.width,
+      0
+    );
+    pipeGradient.addColorStop(0, "#2ECC71");
+    pipeGradient.addColorStop(0.5, "#27AE60");
+    pipeGradient.addColorStop(1, "#229954");
+
+    this.ctx.fillStyle = pipeGradient;
+
+    // Top pipe
+    this.ctx.fillRect(pipe.x, 0, pipe.width, pipe.gapY);
+
+    // Bottom pipe
+    this.ctx.fillRect(
+      pipe.x,
+      pipe.gapY + pipe.gapHeight,
+      pipe.width,
+      this.height
+    );
+
+    // Pipe caps
+    this.ctx.fillStyle = "#1E8449";
+
+    // Top cap
+    this.ctx.fillRect(pipe.x - 5, pipe.gapY - 20, pipe.width + 10, 20);
+    this.ctx.fillStyle = "#145A32";
+    this.ctx.fillRect(pipe.x - 5, pipe.gapY - 20, pipe.width + 10, 5);
+
+    // Bottom cap
+    this.ctx.fillStyle = "#1E8449";
+    this.ctx.fillRect(
+      pipe.x - 5,
+      pipe.gapY + pipe.gapHeight,
+      pipe.width + 10,
+      20
+    );
+    this.ctx.fillStyle = "#145A32";
+    this.ctx.fillRect(
+      pipe.x - 5,
+      pipe.gapY + pipe.gapHeight,
+      pipe.width + 10,
+      5
+    );
   }
 
   drawGenerationEndText() {
-    // Overlay semi-transparan
-    this.ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
-    this.ctx.fillRect(this.width / 2 - 150, this.height / 2 - 50, 300, 100);
+    this.ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+    this.ctx.fillRect(0, 0, this.width, this.height);
 
-    // Teks utama
+    this.ctx.fillStyle = "rgba(79, 70, 229, 0.9)";
+    this.ctx.shadowColor = "#4f46e5";
+    this.ctx.shadowBlur = 20;
+    this.ctx.fillRect(this.width / 2 - 160, this.height / 2 - 60, 320, 120);
+    this.ctx.shadowBlur = 0;
+
     this.ctx.fillStyle = "#FFFFFF";
-    this.ctx.font = "bold 22px Arial";
+    this.ctx.font = "bold 26px Arial";
     this.ctx.textAlign = "center";
-    this.ctx.fillText("Generasi Selesai", this.width / 2, this.height / 2 - 15);
+    this.ctx.textBaseline = "middle";
+    this.ctx.fillText(
+      "✨ Generasi Selesai ✨",
+      this.width / 2,
+      this.height / 2 - 20
+    );
 
-    // Teks sekunder
-    this.ctx.font = "16px Arial";
+    this.ctx.font = "18px Arial";
     this.ctx.fillText(
       "Mempersiapkan generasi berikutnya...",
       this.width / 2,
       this.height / 2 + 15
     );
 
-    // Timer countdown
     const framesLeft =
       this.endDelayFrames - (this.frameCount - this.generationEndFrame);
     const secondsLeft = Math.ceil(framesLeft / 60);
-    this.ctx.fillText(
-      `Dimulai dalam: ${secondsLeft} detik`,
-      this.width / 2,
-      this.height / 2 + 40
-    );
+    const countdownText =
+      secondsLeft > 0 ? `Dimulai dalam: ${secondsLeft} detik` : "Memulai...";
+    this.ctx.fillText(countdownText, this.width / 2, this.height / 2 + 45);
   }
 
   reset() {
     console.log("Resetting entire game...");
     this.init();
+    this.initBackgroundElements();
   }
 }
